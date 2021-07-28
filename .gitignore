@@ -1,3 +1,5 @@
 *.iml
 *.class
 .idea/
+demoStudy2-client/target/
+demoStudy2-service/target/

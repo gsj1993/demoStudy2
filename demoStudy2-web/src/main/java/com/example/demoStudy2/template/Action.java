@@ -1,6 +1,6 @@
 package com.example.demoStudy2.template;
-import com.example.demoStudy2.event.Respnse;
+import com.example.demoStudy2.event.Response;
 
 public interface Action {
-    Respnse execute();
+    Response execute();
 }

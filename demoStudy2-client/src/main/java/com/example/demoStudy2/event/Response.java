@@ -1,14 +1,16 @@
 package com.example.demoStudy2.event;
 
 import com.example.demoStudy2.event.contants.HttpContants;
+import lombok.Data;
 
-public class  Respnse <T>{
+@Data
+public class  Response <T>{
     private String rejCode;
     private String rejMsg;
-    private T t;
-    public Respnse(T t){
+    private T body;
+    public Response(T body){
         this.rejCode= HttpContants.SUCCESS;
         this.rejMsg="success";
-        this.t=t;
+        this.body=body;
     }
 }

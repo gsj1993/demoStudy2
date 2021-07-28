@@ -9,7 +9,7 @@ spring:
   datasource:
     url: jdbc:mysql://49.235.90.145:3306/db_example?characterEncoding=utf8&serverTimezone=UTC
     username: demo
-    data-password: qwer1234
+    password: qwer1234
     driver-class-name: com.mysql.jdbc.Driver
 mybatis:
   mapper-locations: classpath*:mapper/*Mapper.xml
