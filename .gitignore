@@ -3,3 +3,6 @@
 .idea/
 demoStudy2-client/target/
 demoStudy2-service/target/
+demoStudy2-business/target/
+demoStudy2-parent/target/
+demoStudy2-web/target/

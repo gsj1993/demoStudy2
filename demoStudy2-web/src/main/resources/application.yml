@@ -1,5 +1,7 @@
 server:
   port: 8080
+  servlet:
+    context-path: /demo
 
 spring:
   devtools:
@@ -10,7 +12,8 @@ spring:
     url: jdbc:mysql://49.235.90.145:3306/db_example?characterEncoding=utf8&serverTimezone=UTC
     username: demo
     password: qwer1234
-    driver-class-name: com.mysql.jdbc.Driver
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
 mybatis:
   mapper-locations: classpath*:mapper/*Mapper.xml
 

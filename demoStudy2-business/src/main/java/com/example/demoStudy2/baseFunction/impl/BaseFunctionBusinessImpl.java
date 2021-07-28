@@ -3,20 +3,25 @@ package com.example.demoStudy2.baseFunction.impl;
 import com.example.demoStudy2.baseFunction.BaseFunctionBusiness;
 import com.example.demoStudy2.dao.UserInfoMapper;
 import com.example.demoStudy2.event.Req.LoginReq;
+import com.example.demoStudy2.model.UserInfo;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.Resource;
-import java.util.List;
-import java.util.Map;
 
 
 @Component
 public class BaseFunctionBusinessImpl implements BaseFunctionBusiness {
+    private Logger logger = LoggerFactory.getLogger(BaseFunctionBusinessImpl.class);
     @Resource
     private UserInfoMapper userInfoMapper;
     @Override
     public String login(LoginReq req) {
-        List<Map<String, Object>> list=userInfoMapper.queryUserInfo();
-        return "success2"+req.getInfo()+list.toString();
+        long start=System.currentTimeMillis();
+        UserInfo userInfo=  userInfoMapper.selectByPrimaryKey(1);
+        long end=System.currentTimeMillis();
+        logger.info(""+(end-start));
+        return "success2"+req.getInfo()+userInfo.toString();
     }
 }
