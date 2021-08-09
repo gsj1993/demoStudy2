@@ -1,6 +1,7 @@
 package com.example.demoStudy2.controller;
 
 import com.example.demoStudy2.baseFunction.BaseFunctionBusiness;
+import com.example.demoStudy2.event.Req.AuthGetTokenReq;
 import com.example.demoStudy2.event.Req.LoginReq;
 import com.example.demoStudy2.event.Response;
 import com.example.demoStudy2.template.CoreTemplate;
@@ -28,5 +29,18 @@ public class BaseFunction {
             return new Response(baseFunctionBusiness.login(req));
                 }
         );
+    }
+
+    /**
+     * 使用authCode请求accessToken和openID
+     * @param req
+     * @return
+     */
+    @PostMapping("/authGetToken")
+    @ResponseBody
+    public Response authGetToken(@RequestBody AuthGetTokenReq req){
+        return coreTemplate.query(()-> {
+            return new Response(baseFunctionBusiness.authGetToken(req));
+        });
     }
 }

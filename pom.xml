@@ -12,6 +12,7 @@
     <module>demoStudy2-parent</module>
     <module>demoStudy2-client</module>
     <module>demoStudy2-service</module>
+      <module>demoStudy2-util</module>
   </modules>
   <packaging>pom</packaging>
   <properties>
