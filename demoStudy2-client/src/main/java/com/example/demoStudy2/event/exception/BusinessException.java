@@ -2,7 +2,7 @@ package com.example.demoStudy2.event.exception;
 
 import com.example.demoStudy2.event.message.Message;
 
-public class BusinessException extends Exception {
+public class BusinessException extends RuntimeException{
     private String errorCode;
     private String errorMsg;
     public BusinessException(Message message) {
@@ -10,7 +10,7 @@ public class BusinessException extends Exception {
         this.errorMsg = message.getMsg();
     }
 
-    protected BusinessException(String errorCode, String errorMsg) {
+    public BusinessException(String errorCode, String errorMsg) {
         this.errorCode = errorCode;
         this.errorMsg = errorMsg;
     }

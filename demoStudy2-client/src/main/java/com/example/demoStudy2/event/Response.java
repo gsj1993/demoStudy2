@@ -13,4 +13,10 @@ public class  Response <T>{
         this.rejMsg="success";
         this.body=body;
     }
+
+    public Response(String rejCode ,String rejMsg){
+        this.rejCode= rejCode;
+        this.rejMsg=rejMsg;
+        this.body=null;
+    }
 }

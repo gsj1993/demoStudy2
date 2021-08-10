@@ -1,8 +1,7 @@
 package com.example.demoStudy2.controller;
 
 import com.example.demoStudy2.baseFunction.BaseFunctionBusiness;
-import com.example.demoStudy2.event.Req.AuthGetTokenReq;
-import com.example.demoStudy2.event.Req.LoginReq;
+import com.example.demoStudy2.event.Req.*;
 import com.example.demoStudy2.event.Response;
 import com.example.demoStudy2.template.CoreTemplate;
 import org.springframework.stereotype.Controller;
@@ -43,4 +42,57 @@ public class BaseFunction {
             return new Response(baseFunctionBusiness.authGetToken(req));
         });
     }
+
+    /**
+     * 文件请求
+     * @param req
+     * @return
+     */
+    @PostMapping("/initiateRequest")
+    @ResponseBody
+    public Response initiateRequest(@RequestBody InitiateReq req){
+        return coreTemplate.query(()-> {
+            return new Response(baseFunctionBusiness.initiateRequest(req));
+        });
+    }
+
+    /**
+     * 邮件预请求
+     * @param req
+     * @return
+     */
+    @PostMapping("/initiateEmailRequest")
+    @ResponseBody
+    public Response initiateEmailRequest(@RequestBody InitiateEmailReq req){
+        return coreTemplate.query(()-> {
+            return new Response(baseFunctionBusiness.initiateEmailRequest(req));
+        });
+    }
+
+    /**
+     * 签名预请求
+     * @param req
+     * @return
+     */
+    @PostMapping("/initiateSignRequest")
+    @ResponseBody
+    public Response initiateSignRequest(@RequestBody InitiateSignReq req){
+        return coreTemplate.query(()-> {
+            return new Response(baseFunctionBusiness.initiateSignRequest(req));
+        });
+    }
+
+    /**
+     * pdf签名预请求
+     * @param req
+     * @return
+     */
+    @PostMapping("/initiatePdfSignRequest")
+    @ResponseBody
+    public Response initiatePdfSignRequest(@RequestBody InitiatePdfSignReq req){
+        return coreTemplate.query(()-> {
+            return new Response(baseFunctionBusiness.initiatePdfSignRequest(req));
+        });
+    }
+
 }

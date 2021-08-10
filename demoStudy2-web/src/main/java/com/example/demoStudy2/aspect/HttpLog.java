@@ -34,7 +34,6 @@ public class HttpLog  {
 
     }
 
-
     @Around("webLogPointcut()")
     public Object around(ProceedingJoinPoint  proceedingJoinPoint) throws Throwable {
         HttpServletRequest request = ((ServletRequestAttributes) RequestContextHolder.getRequestAttributes()).getRequest();

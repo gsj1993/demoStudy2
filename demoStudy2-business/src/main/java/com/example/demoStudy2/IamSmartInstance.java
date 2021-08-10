@@ -2,7 +2,8 @@ package com.example.demoStudy2;
 
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
-import com.example.demoStudy2.event.Resp.AuthGetTokenResp;
+import com.example.demoStudy2.event.Resp.*;
+import com.example.demoStudy2.iamSmartUtil.IamSmartUtil;
 import com.example.demoStudy2.util.EncriptAndDecriptUtils;
 import com.example.demoStudy2.util.JCEUtil;
 import com.example.demoStudy2.util.SecretUtil;
@@ -14,7 +15,6 @@ import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.conn.ssl.NoopHostnameVerifier;
 import org.apache.http.conn.ssl.TrustStrategy;
-import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.ssl.SSLContexts;
@@ -25,43 +25,91 @@ import org.springframework.stereotype.Component;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import javax.net.ssl.SSLContext;
-import java.io.IOException;
-import java.net.URLEncoder;
+
 import java.security.*;
 import java.security.cert.X509Certificate;
-import java.security.interfaces.RSAPrivateKey;
-import java.security.interfaces.RSAPublicKey;
-import java.util.UUID;
+import java.util.List;
+
 @Component
 @Slf4j
 public class IamSmartInstance {
+    /**
+     * 客户ID  由iam-smart下发
+     */
     @Value("${clientId}")
     private String clientID;
+
+    /**
+     * 请求头签名参数 默认 HmacSHA256
+     */
     @Value("${signatureMethod}")
     private String signatureMethod;
+    /**
+     * 服务端iam-smart域名
+     */
     @Value("${url}")
     private String httpUrl;
+
+    /**
+     * 请求与签名加密参数 由iam-smart下发
+     */
     @Value("${secret}")
     private String secret;
 
+    /**
+     * 获取报文通讯密钥   iam-smart配置公钥的私钥
+     */
     @Value("${rsaPrivateKey}")
     private String rsaPrivateKey;
 
-    private String secretKey=null;
+    @Value("${businessID}")
+    private String businessID;
+
+    /**
+     * 后续报文通讯的密钥 aesKey
+     */
     private byte[] aesKey=null;
-    private String pubKey=null;
+    /**
+     * 报文通讯加密密钥的生效日期  时间戳格式
+     */
     private long issueAt=-1;
+    /**
+     * 报文通讯的加密密钥的有效时间  一天
+     */
     private long expiresIn=-1;
+    /**
+     * 加密方法
+     */
     private Mac sha256_HMAC;
+    /**
+     * http请求
+     */
     private CloseableHttpClient client;
+    /**
+     * 初始话标志
+     */
     private static boolean initFlag=false;
+    /**
+     * rsa密钥
+     */
     private java.security.interfaces.RSAPrivateKey rSAPrivateKey=null;
+
+    /**
+     * 初始化参数与对象，
+     */
     @SneakyThrows
     public void init(){
         if(!initFlag){
+            /**
+             * 请求头参数签名对象初始化
+             */
             this.sha256_HMAC = Mac.getInstance(signatureMethod);
             SecretKeySpec secret_key = new SecretKeySpec(secret.getBytes(), signatureMethod);
             this.sha256_HMAC.init(secret_key);
+
+            /**
+             * httpClient 对象初始化，去除证书验证
+             */
             SSLContext sslContext = null;
             try {
                 sslContext = SSLContexts.custom().loadTrustMaterial(null, new TrustStrategy() {
@@ -77,48 +125,43 @@ public class IamSmartInstance {
             } catch (KeyStoreException e) {
                 e.printStackTrace();
             }
-            //创建httpClient
             this.client = HttpClients.custom().setSSLContext(sslContext).
                     setSSLHostnameVerifier(new NoopHostnameVerifier()).build();
+            /**
+             * ras私钥初始化
+             */
             rSAPrivateKey=EncriptAndDecriptUtils.getPrivateKey(rsaPrivateKey);
-            //将jdk 针对aes加密超过128位不支持的限制放开
+
+            /**
+             * 将jdk 针对aes加密超过128位不支持的限制放开
+             */
             JCEUtil.removeCryptographyRestrictions();
         }
     }
 
 
-
+    /**
+     * 报文请求获取aes加密密钥
+     */
     @SneakyThrows
     private void setKeyMap() {
+        //初始化
         init();
-        long timestamp=System.currentTimeMillis();
-        UUID u = UUID.randomUUID();
-        String nonce =u.toString();
+        //
+        String url=this.httpUrl+"/api/v1/security/getKey";
         JSONObject jSONObject=new JSONObject();
         String request_body=jSONObject.toJSONString();
-        String message = this.clientID + this.signatureMethod + timestamp+ nonce + request_body;
-        String hash = Base64.encodeBase64String(this.sha256_HMAC.doFinal(message.getBytes()));
-        String signature = URLEncoder.encode(hash,"UTF-8");
-        String url=this.httpUrl+"/api/v1/security/getKey";
-        HttpPost httpPost=new HttpPost(url);
-        httpPost.setHeader("Content-Type","application/json");
-        httpPost.setHeader("clientID",this.clientID);
-        httpPost.setHeader("signatureMethod",this.signatureMethod);
-        httpPost.setHeader("signature",signature);
-        httpPost.setHeader("timestamp",String.valueOf(timestamp));
-        httpPost.setHeader("nonce",nonce);
-        StringEntity stringEntity = new StringEntity(request_body);
-        httpPost.setEntity(stringEntity);
+        HttpPost httpPost= IamSmartUtil.initRequest(clientID,signatureMethod,url,request_body,sha256_HMAC);
         CloseableHttpResponse Response =client.execute(httpPost);
         HttpEntity entity = Response.getEntity();
         // 通过EntityUtils 来将我们的数据转换成字符串
         String str = EntityUtils.toString(entity, "UTF-8");
         Response.close();
-        JSONObject response= JSONObject.parseObject(str);
+        JSONObject response=IamSmartUtil.initResponse(str);
         JSONObject content= response.getJSONObject("content");
-        secretKey=content.getString("secretKey");
+        String secretKey=content.getString("secretKey");
         aesKey=EncriptAndDecriptUtils.privateDecrypt1(secretKey,rSAPrivateKey);
-        this.pubKey=content.getString("pubKey");
+        String pubKey=content.getString("pubKey");
         this.issueAt=content.getLong("issueAt");
         this.expiresIn=content.getLong("expiresIn");
         log.info("secretKey={}",secretKey);
@@ -131,74 +174,214 @@ public class IamSmartInstance {
     @SneakyThrows
     public AuthGetTokenResp authGetToken(String code){
         init();
-        if(-1==issueAt||validate(issueAt,expiresIn)){
+        if(-1==issueAt||IamSmartUtil.validate(issueAt,expiresIn)){
             setKeyMap();
         }
-        long timestamp=System.currentTimeMillis();
-        UUID u = UUID.randomUUID();
-        String nonce =u.toString();
+        String url=this.httpUrl+"/api/v1/auth/getToken";
+
         JSONObject jSONObject=new JSONObject();
         jSONObject.put("code",code);
         jSONObject.put("grantType","authorization_code");
         String request_body=jSONObject.toJSONString();
         JSONObject reqDdata=new JSONObject();
-        reqDdata.put("content", SecretUtil.encrypt(request_body.getBytes(),aesKey));
-        String message = this.clientID + this.signatureMethod + timestamp+ nonce + reqDdata.toString();
-        String hash = Base64.encodeBase64String(this.sha256_HMAC.doFinal(message.getBytes()));
-        String signature = URLEncoder.encode(hash,"UTF-8");
-        String url=this.httpUrl+"/api/v1/auth/getToken";
-        HttpPost httpPost=new HttpPost(url);
-        httpPost.setHeader("Content-Type","application/json");
-        httpPost.setHeader("clientID",this.clientID);
-        httpPost.setHeader("signatureMethod",this.signatureMethod);
-        httpPost.setHeader("signature",signature);
-        httpPost.setHeader("timestamp",String.valueOf(timestamp));
-        httpPost.setHeader("nonce",nonce);
-        StringEntity stringEntity = new StringEntity(reqDdata.toString());
-        log.info(reqDdata.toString());
-        httpPost.setEntity(stringEntity);
+        reqDdata.put("content", SecretUtil.encrypt(request_body.getBytes(),aesKey));//请求参数加密
+
+        HttpPost httpPost= IamSmartUtil.initRequest(clientID,signatureMethod,url,reqDdata.toString(),sha256_HMAC);
+
         CloseableHttpResponse Response =client.execute(httpPost);
         HttpEntity entity = Response.getEntity();
         // 通过EntityUtils 来将我们的数据转换成字符串
         String str = EntityUtils.toString(entity, "UTF-8");
         Response.close();
-        log.info(str);
-        JSONObject json=JSON.parseObject(str);
+
+        JSONObject response=IamSmartUtil.initResponse(str);
+        String content=response.getString("content");
+        String result = SecretUtil.decrypt(Base64.decodeBase64(content),aesKey);
+        JSONObject contentData=JSON.parseObject(result);
+        //返回参数格式处理
         AuthGetTokenResp authGetTokenResp=new AuthGetTokenResp();
-        if("D00000".equals(json.getString("code"))){
-            String content=json.getString("content");
-            log.info(content);
-            String result = SecretUtil.decrypt(Base64.decodeBase64(content),aesKey);
-            JSONObject contentData=JSON.parseObject(result);
-            authGetTokenResp.setAccessToken(contentData.getString("accessToken"));
-            authGetTokenResp.setExpiresIn(contentData.getLong("expiresIn"));
-            authGetTokenResp.setTokenType(contentData.getString("tokenType"));
-            authGetTokenResp.setIssueAt(contentData.getString("issueAt"));
-            authGetTokenResp.setExpressed(contentData.getString("expressed"));
-            authGetTokenResp.setMilliseconds(contentData.getString("milliseconds"));
-            authGetTokenResp.setOpenID(contentData.getString("openID"));
-            authGetTokenResp.setLastModifiedDate(contentData.getLong("lastModifiedDate"));
-            authGetTokenResp.setUserType(contentData.getString("userType"));
-            authGetTokenResp.setScope(contentData.getString("scope"));
-            log.info(result);
-        }
+        authGetTokenResp.setAccessToken(contentData.getString("accessToken"));
+        authGetTokenResp.setExpiresIn(contentData.getLong("expiresIn"));
+        authGetTokenResp.setTokenType(contentData.getString("tokenType"));
+        authGetTokenResp.setIssueAt(contentData.getString("issueAt"));
+        authGetTokenResp.setExpressed(contentData.getString("expressed"));
+        authGetTokenResp.setMilliseconds(contentData.getString("milliseconds"));
+        authGetTokenResp.setOpenID(contentData.getString("openID"));
+        authGetTokenResp.setLastModifiedDate(contentData.getLong("lastModifiedDate"));
+        authGetTokenResp.setUserType(contentData.getString("userType"));
+        authGetTokenResp.setScope(contentData.getString("scope"));
         return authGetTokenResp;
     }
 
-    /**
-     * 校验是否超过一天有效期
-     * @param issueAt 生效时间
-     * @param expiresIn 有效时间
-     * @return true 需要重新获取    false 当前可用
-     */
-    public boolean validate(long issueAt,long expiresIn){
-        long now=System.currentTimeMillis()-86400000;
-        if((issueAt+expiresIn)<=now){
-            return true;
-        }else{
-            return false;
-        }
 
+    @SneakyThrows
+    public InitiateResp initiateRequest (String accessToken, String openID, String source, String redirectURI, List<String> profileFields){
+        init();
+        if(-1==issueAt||IamSmartUtil.validate(issueAt,expiresIn)){
+            setKeyMap();
+        }
+        String url=this.httpUrl+"/api/v1/account/auth/profile/initiateRequest";
+
+        JSONObject jSONObject=new JSONObject();
+        jSONObject.put("businessID",businessID);
+        jSONObject.put("accessToken",accessToken);
+        jSONObject.put("openID",openID);
+        jSONObject.put("source",source);
+        jSONObject.put("redirectURI",redirectURI);
+        jSONObject.put("state",businessID);
+        jSONObject.put("profileFields",profileFields);
+        String request_body=jSONObject.toJSONString();
+        JSONObject reqDdata=new JSONObject();
+        reqDdata.put("content", SecretUtil.encrypt(request_body.getBytes(),aesKey));//请求参数加密
+
+        HttpPost httpPost= IamSmartUtil.initRequest(clientID,signatureMethod,url,reqDdata.toString(),sha256_HMAC);
+
+        CloseableHttpResponse Response =client.execute(httpPost);
+        HttpEntity entity = Response.getEntity();
+        // 通过EntityUtils 来将我们的数据转换成字符串
+        String str = EntityUtils.toString(entity, "UTF-8");
+        Response.close();
+
+        JSONObject response=IamSmartUtil.initResponse(str);
+        String content=response.getString("content");
+        String result = SecretUtil.decrypt(Base64.decodeBase64(content),aesKey);
+        JSONObject contentData=JSON.parseObject(result);
+        //返回参数格式处理
+        InitiateResp initiateResp=new InitiateResp();
+        initiateResp.setAuthByQR(contentData.getBoolean("authByQR"));
+        initiateResp.setTicketID(contentData.getString("ticketID"));
+        return initiateResp;
+    }
+
+
+    @SneakyThrows
+    public InitiateEmailResp initiateEmailRequest (String accessToken,String openID,String source,String redirectURI,String formName,String formNum,String formDesc,List<String> eMEFields){
+        init();
+        if(-1==issueAt||IamSmartUtil.validate(issueAt,expiresIn)){
+            setKeyMap();
+        }
+        String url=this.httpUrl+"/api/v1/account/auth/eme/initiateRequest";
+
+        JSONObject jSONObject=new JSONObject();
+        jSONObject.put("businessID",businessID);
+        jSONObject.put("accessToken",accessToken);
+        jSONObject.put("openID",openID);
+        jSONObject.put("source",source);
+        jSONObject.put("redirectURI",redirectURI);
+        jSONObject.put("state",businessID);
+        jSONObject.put("formName",formName);
+        jSONObject.put("formNum",formNum);
+        jSONObject.put("formDesc",formDesc);
+        jSONObject.put("eMEFields",eMEFields);
+        String request_body=jSONObject.toJSONString();
+        JSONObject reqDdata=new JSONObject();
+        reqDdata.put("content", SecretUtil.encrypt(request_body.getBytes(),aesKey));//请求参数加密
+
+        HttpPost httpPost= IamSmartUtil.initRequest(clientID,signatureMethod,url,reqDdata.toString(),sha256_HMAC);
+
+        CloseableHttpResponse Response =client.execute(httpPost);
+        HttpEntity entity = Response.getEntity();
+        // 通过EntityUtils 来将我们的数据转换成字符串
+        String str = EntityUtils.toString(entity, "UTF-8");
+        Response.close();
+
+        JSONObject response=IamSmartUtil.initResponse(str);
+        String content=response.getString("content");
+        String result = SecretUtil.decrypt(Base64.decodeBase64(content),aesKey);
+        JSONObject contentData=JSON.parseObject(result);
+        //返回参数格式处理
+        InitiateEmailResp initiateEmailResp=new InitiateEmailResp();
+        initiateEmailResp.setAuthByQR(contentData.getBoolean("authByQR"));
+        initiateEmailResp.setTicketID(contentData.getString("ticketID"));
+        return initiateEmailResp;
+    }
+
+    @SneakyThrows
+    public InitiateSignResp initiateSignRequest (String accessToken, String openID, String source, String redirectURI, String hashCode, String sigAlgo, String HKICHash, String department, String serviceName, String documentName ){
+        init();
+        if(-1==issueAt||IamSmartUtil.validate(issueAt,expiresIn)){
+            setKeyMap();
+        }
+        String url=this.httpUrl+"/api/v1/account/auth/eme/initiateRequest";
+
+        JSONObject jSONObject=new JSONObject();
+        jSONObject.put("businessID",businessID);
+        jSONObject.put("accessToken",accessToken);
+        jSONObject.put("openID",openID);
+        jSONObject.put("source",source);
+        jSONObject.put("redirectURI",redirectURI);
+        jSONObject.put("state",businessID);
+        jSONObject.put("hashCode",hashCode);
+        jSONObject.put("sigAlgo",sigAlgo);
+        jSONObject.put("HKICHash",HKICHash);
+        jSONObject.put("department",department);
+        jSONObject.put("serviceName",serviceName);
+        jSONObject.put("documentName",documentName);
+        String request_body=jSONObject.toJSONString();
+        JSONObject reqDdata=new JSONObject();
+        reqDdata.put("content", SecretUtil.encrypt(request_body.getBytes(),aesKey));//请求参数加密
+
+        HttpPost httpPost= IamSmartUtil.initRequest(clientID,signatureMethod,url,reqDdata.toString(),sha256_HMAC);
+
+        CloseableHttpResponse Response =client.execute(httpPost);
+        HttpEntity entity = Response.getEntity();
+        // 通过EntityUtils 来将我们的数据转换成字符串
+        String str = EntityUtils.toString(entity, "UTF-8");
+        Response.close();
+
+        JSONObject response=IamSmartUtil.initResponse(str);
+        String content=response.getString("content");
+        String result = SecretUtil.decrypt(Base64.decodeBase64(content),aesKey);
+        JSONObject contentData=JSON.parseObject(result);
+        //返回参数格式处理
+        InitiateSignResp initiateSignResp=new InitiateSignResp();
+        initiateSignResp.setAuthByQR(contentData.getBoolean("authByQR"));
+        initiateSignResp.setTicketID(contentData.getString("ticketID"));
+        return initiateSignResp;
+    }
+
+    @SneakyThrows
+    public InitiatePdfSignResp initiatePdfSignRequest (String accessToken, String openID, String source, String redirectURI, String docDigest
+    , String HKICHash, String department, String serviceName, String documentName){
+        init();
+        if(-1==issueAt||IamSmartUtil.validate(issueAt,expiresIn)){
+            setKeyMap();
+        }
+        String url=this.httpUrl+"/api/v1/account/auth/eme/initiateRequest";
+
+        JSONObject jSONObject=new JSONObject();
+        jSONObject.put("businessID",businessID);
+        jSONObject.put("accessToken",accessToken);
+        jSONObject.put("openID",openID);
+        jSONObject.put("source",source);
+        jSONObject.put("redirectURI",redirectURI);
+        jSONObject.put("state",businessID);
+        jSONObject.put("docDigest",docDigest);
+        jSONObject.put("HKICHash",HKICHash);
+        jSONObject.put("department",department);
+        jSONObject.put("serviceName",serviceName);
+        jSONObject.put("documentName",documentName);
+        String request_body=jSONObject.toJSONString();
+        JSONObject reqDdata=new JSONObject();
+        reqDdata.put("content", SecretUtil.encrypt(request_body.getBytes(),aesKey));//请求参数加密
+
+        HttpPost httpPost= IamSmartUtil.initRequest(clientID,signatureMethod,url,reqDdata.toString(),sha256_HMAC);
+
+        CloseableHttpResponse Response =client.execute(httpPost);
+        HttpEntity entity = Response.getEntity();
+        // 通过EntityUtils 来将我们的数据转换成字符串
+        String str = EntityUtils.toString(entity, "UTF-8");
+        Response.close();
+
+        JSONObject response=IamSmartUtil.initResponse(str);
+        String content=response.getString("content");
+        String result = SecretUtil.decrypt(Base64.decodeBase64(content),aesKey);
+        JSONObject contentData=JSON.parseObject(result);
+        //返回参数格式处理
+        InitiatePdfSignResp initiatePdfSignResp=new InitiatePdfSignResp();
+        initiatePdfSignResp.setAuthByQR(contentData.getBoolean("authByQR"));
+        initiatePdfSignResp.setTicketID(contentData.getString("ticketID"));
+        return initiatePdfSignResp;
     }
 
 }
